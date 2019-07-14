@@ -11,7 +11,6 @@ import android.support.design.widget.TextInputEditText
 import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
 import android.text.InputType
-import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.WindowManager
@@ -20,14 +19,19 @@ import android.webkit.*
 import android.widget.TextView
 import android.widget.Toast
 import kotlinx.android.synthetic.main.activity_fullscreen.*
+import org.json.JSONArray
+import org.json.JSONObject
 
 class FullscreenActivity : AppCompatActivity() {
 
     val SHARED = "com.github.alexmelyon.map_nfc.shared"
-    val DEFAULT_SITE = "http://maps.yandex.ru/"
+    val DEFAULT_SITE = "https://vtm.su/"
     val LAST_LOADED_SITE_PREF = "LAST_LOADED_SITE_PREF"
     val KNOWN_SITES_PREF = "KNOWN_SITES_PREF"
 
+    enum class ScanResultsReceiver { NOTHING, ALERT, JS }
+
+    var scanResultsReceiver: ScanResultsReceiver = ScanResultsReceiver.NOTHING
     lateinit var knownSites: MutableList<String>
     lateinit var wifiManager: WifiManager
     lateinit var wifiScanReceiver: BroadcastReceiver
@@ -61,7 +65,11 @@ class FullscreenActivity : AppCompatActivity() {
         wifiScanReceiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
                 if (intent.action == WifiManager.SCAN_RESULTS_AVAILABLE_ACTION) {
-                    showScanResultsAlert(wifiManager.scanResults)
+                    when(scanResultsReceiver) {
+                        ScanResultsReceiver.ALERT -> showScanResultsAlert(wifiManager.scanResults)
+                        ScanResultsReceiver.JS -> webviewOnReadWifi(wifiManager.scanResults)
+                    }
+                    scanResultsReceiver = ScanResultsReceiver.NOTHING
                 }
             }
         }
@@ -117,8 +125,41 @@ class FullscreenActivity : AppCompatActivity() {
                 callback.invoke(origin, true, false)
             }
         }
+        web_view.addJavascriptInterface(WebAppInterface(this), "Android")
         val lastLoadedSite = getSharedPreferences(SHARED, Context.MODE_PRIVATE).getString(LAST_LOADED_SITE_PREF, DEFAULT_SITE)
         web_view.loadUrl(lastLoadedSite)
+    }
+
+    class WebAppInterface(val activity: FullscreenActivity) {
+
+        @JavascriptInterface
+        fun readWifi() {
+            activity.scanResultsReceiver = ScanResultsReceiver.JS
+            activity.startScanWifi(ScanResultsReceiver.JS)
+        }
+    }
+
+    fun startScanWifi(receiver: ScanResultsReceiver) {
+        scanResultsReceiver = receiver
+        wifiManager.startScan()
+    }
+
+    fun webviewOnReadWifi(scanResults: List<ScanResult>) {
+        val json = scanResults.map { JSONObject().apply {
+            put("bssid", it.BSSID)
+            put("ssid", it.SSID)
+            put("level", it.level)
+        }}.fold(JSONArray()) { total, next -> total.put(next) }
+        .let { JSONObject().apply { put("scanResults", it) } }
+        webviewRunJs("onReadWifi", json.toString())
+    }
+
+    fun webviewRunJs(method: String, args: String) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+            web_view.evaluateJavascript("$method($args);", null)
+        } else {
+            web_view.loadUrl("javascript:$method($args);")
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -147,7 +188,7 @@ class FullscreenActivity : AppCompatActivity() {
                 showAlertEditDialog("Enter url:", okAction = { url ->
                     var withProtocol = url
                     if (!withProtocol.startsWith("http://") || !withProtocol.startsWith("https://")) {
-                        withProtocol = "http://$url"
+                        withProtocol = "https://$url"
                     }
                     web_view.loadUrl(withProtocol)
                     knownSites.add(0, withProtocol)
@@ -169,7 +210,7 @@ class FullscreenActivity : AppCompatActivity() {
                         }).show()
             }
             R.id.scan_wifi_menu -> {
-                wifiManager.startScan()
+                startScanWifi(ScanResultsReceiver.ALERT)
             }
             else -> {
                 val url = knownSites[item.itemId]
