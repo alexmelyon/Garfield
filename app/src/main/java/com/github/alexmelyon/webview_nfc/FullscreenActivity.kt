@@ -1,8 +1,11 @@
 package com.github.alexmelyon.webview_nfc
 
+import android.Manifest
 import android.content.*
+import android.content.pm.PackageManager
 import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.Bundle
 import android.support.design.widget.TextInputEditText
 import android.support.v7.app.AlertDialog
@@ -39,6 +42,18 @@ class FullscreenActivity : AppCompatActivity() {
         initWebview()
 
         initWifiManager()
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M)
+        {
+            if(checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                    && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION).toTypedArray(), 87)
+            }
+        }
     }
 
     fun initWifiManager() {
