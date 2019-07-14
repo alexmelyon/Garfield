@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/add_site_menu" android:title="Добавить сайт..."/>
+    <item android:id="@+id/remove_site_menu" android:title="Удалить сайт..."/>
+    <item android:id="@+id/scan_wifi_menu" android:title="Сканировать Wi-Fi..."/>
+</menu>
