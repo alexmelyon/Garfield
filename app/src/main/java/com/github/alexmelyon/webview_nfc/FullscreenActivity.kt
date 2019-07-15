@@ -7,6 +7,7 @@ import android.net.wifi.ScanResult
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Message
 import android.support.design.widget.TextInputEditText
 import android.support.v7.app.AlertDialog
 import android.support.v7.app.AppCompatActivity
@@ -29,9 +30,8 @@ class FullscreenActivity : AppCompatActivity() {
     val LAST_LOADED_SITE_PREF = "LAST_LOADED_SITE_PREF"
     val KNOWN_SITES_PREF = "KNOWN_SITES_PREF"
 
-    enum class ScanResultsReceiver { NOTHING, ALERT, JS }
-
-    var scanResultsReceiver: ScanResultsReceiver = ScanResultsReceiver.NOTHING
+    var scanResultsRequestedAlert = 0
+    var scanResultsRequestedJs = 0
     lateinit var knownSites: MutableList<String>
     lateinit var wifiManager: WifiManager
     lateinit var wifiScanReceiver: BroadcastReceiver
@@ -44,8 +44,6 @@ class FullscreenActivity : AppCompatActivity() {
         knownSites = getSharedPreferences(SHARED, Context.MODE_PRIVATE).getString(KNOWN_SITES_PREF, "").split(",").toMutableList()
 
         initWebview()
-
-        initWifiManager()
     }
 
     override fun onResume() {
@@ -58,6 +56,8 @@ class FullscreenActivity : AppCompatActivity() {
                 requestPermissions(listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION).toTypedArray(), 87)
             }
         }
+
+        initWifiManager()
     }
 
     fun initWifiManager() {
@@ -65,15 +65,23 @@ class FullscreenActivity : AppCompatActivity() {
         wifiScanReceiver = object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
                 if (intent.action == WifiManager.SCAN_RESULTS_AVAILABLE_ACTION) {
-                    when(scanResultsReceiver) {
-                        ScanResultsReceiver.ALERT -> showScanResultsAlert(wifiManager.scanResults)
-                        ScanResultsReceiver.JS -> webviewOnReadWifi(wifiManager.scanResults)
+                    if(scanResultsRequestedAlert > 0) {
+                        showScanResultsAlert(wifiManager.scanResults)
+                        scanResultsRequestedAlert--
                     }
-                    scanResultsReceiver = ScanResultsReceiver.NOTHING
+                    if(scanResultsRequestedJs > 0) {
+                        webviewOnReadWifi(wifiManager.scanResults)
+                        scanResultsRequestedJs--
+                    }
                 }
             }
         }
         registerReceiver(wifiScanReceiver, IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION))
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(wifiScanReceiver)
     }
 
     fun showScanResultsAlert(scanResults: List<ScanResult>) {
@@ -109,20 +117,23 @@ class FullscreenActivity : AppCompatActivity() {
                 Toast.makeText(this@FullscreenActivity, "${errorCode} ${description}", Toast.LENGTH_LONG).show()
             }
 
-            override fun onPageFinished(view: WebView?, url: String) {
-                this@FullscreenActivity.title = view?.title
-                updateOptionsMenu(url)
+            override fun onTooManyRedirects(view: WebView?, cancelMsg: Message?, continueMsg: Message?) {
+                Toast.makeText(this@FullscreenActivity, "TOO MANY REDIRECTS", Toast.LENGTH_LONG).show()
             }
 
-            fun updateOptionsMenu(url: String) {
+            override fun onPageFinished(view: WebView?, url: String) {
+                this@FullscreenActivity.title = view?.title
                 getSharedPreferences(SHARED, Context.MODE_PRIVATE).edit().apply {
                     putString(LAST_LOADED_SITE_PREF, url)
                 }.apply()
             }
+
         }
         web_view.webChromeClient = object : WebChromeClient() {
             override fun onGeolocationPermissionsShowPrompt(origin: String, callback: GeolocationPermissions.Callback) {
-                callback.invoke(origin, true, false)
+                val allow = true
+                val retain = false
+                callback.invoke(origin, allow, retain)
             }
         }
         web_view.addJavascriptInterface(WebAppInterface(this), "Android")
@@ -134,14 +145,9 @@ class FullscreenActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun readWifi() {
-            activity.scanResultsReceiver = ScanResultsReceiver.JS
-            activity.startScanWifi(ScanResultsReceiver.JS)
+            activity.scanResultsRequestedJs++
+            activity.wifiManager.startScan()
         }
-    }
-
-    fun startScanWifi(receiver: ScanResultsReceiver) {
-        scanResultsReceiver = receiver
-        wifiManager.startScan()
     }
 
     fun webviewOnReadWifi(scanResults: List<ScanResult>) {
@@ -210,7 +216,8 @@ class FullscreenActivity : AppCompatActivity() {
                         }).show()
             }
             R.id.scan_wifi_menu -> {
-                startScanWifi(ScanResultsReceiver.ALERT)
+                scanResultsRequestedAlert++
+                wifiManager.startScan()
             }
             else -> {
                 val url = knownSites[item.itemId]
