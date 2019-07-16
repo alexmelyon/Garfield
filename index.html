@@ -1,8 +1,24 @@
 <html>
 <head>
-	<title>TITLE></title>
+	<title>TITLE</title>
 </head>
 <body>
-This is the body.
+<p>This is the body.</p>
+<p><input type="button" onclick="callAndroid()" value="readWifi"/><p>
+<textarea id="textarea">
+</textarea>
+<script type="text/javascript">
+function callAndroid() {
+	Android.readWifi();
+}
+function onReadWifi(jsonObj) {
+  var scanResults = jsonObj["scanResults"];
+  for(var i in scanResults) {
+    var item = scanResults[i];
+    console.log(item["bssid"] + " " + item["ssid"] + " " + item["level"]);
+    document.getElementById("textarea").value += item["bssid"] + " " + item["ssid"] + " " + item["level"] + "\n";
+  }
+}
+</script>
 </body>
 </html>
