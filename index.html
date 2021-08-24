@@ -19,11 +19,13 @@ function onReadWifi(jsonObj) {
     document.getElementById("textarea").value += item["bssid"] + " " + item["ssid"] + " " + item["level"] + "\n";
   }
 }
-	console.log("isMobile " + Mobile.isMobilie());
-	console.log("isAndroid " + Mobile.isAndroid());
-	console.log("isIos " + Mobile.isIos());
-	console.log("isPhone " + Mobile.isPhone());
-	console.log("isTablet " + Mobile.isTablet());
+if(Mobile) {
+    console.log("isMobile " + Mobile.isMobilie());
+    console.log("isAndroid " + Mobile.isAndroid());
+    console.log("isIos " + Mobile.isIos());
+    console.log("isPhone " + Mobile.isPhone());
+    console.log("isTablet " + Mobile.isTablet());
+}
 </script>
 </body>
 </html>
