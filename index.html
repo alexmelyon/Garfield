@@ -19,7 +19,8 @@ function onReadWifi(jsonObj) {
     document.getElementById("textarea").value += item["bssid"] + " " + item["ssid"] + " " + item["level"] + "\n";
   }
 }
-if(Mobile != undefined) {
+
+function testMobile() {
     console.log("isMobile " + Mobile.isMobile());
     console.log("isAndroid " + Mobile.isAndroid());
     console.log("isIos " + Mobile.isIos());
